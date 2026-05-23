@@ -144,6 +144,23 @@ def get_employee(employee_code: str, additional_fields: str = "") -> str:
     return _dump(_call("GET", f"/employees/{employee_code}", params=params))
 
 
+@mcp.tool()
+def get_employee_by_key(employee_key: str) -> str:
+    """employeeKey（ハッシュ値）から従業員情報（名前・所属など）を取得します。
+    打刻データや勤怠データに含まれる employeeKey から名前を調べるときに使います。
+
+    Args:
+        employee_key: 従業員識別キー（例: fdaf8c58...）。前方一致で検索します。
+    """
+    employees = _call("GET", "/employees", params={"includeResigner": "true"})
+    if not isinstance(employees, list):
+        return _dump(employees)
+    matched = [e for e in employees if e.get("key", "").startswith(employee_key)]
+    if not matched:
+        return _dump({"error": f"employeeKey '{employee_key}' に一致する従業員が見つかりません"})
+    return _dump(matched[0] if len(matched) == 1 else matched)
+
+
 # ===========================================================================
 # 所属（部署）
 # ===========================================================================
