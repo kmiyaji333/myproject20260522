@@ -6,6 +6,7 @@
 
 import json
 import os
+import winreg
 from typing import Any
 
 import httpx
@@ -16,8 +17,28 @@ mcp = FastMCP("KING OF TIME")
 BASE_URL = "https://api.kingtime.jp/v1.0"
 
 
-def _headers() -> dict[str, str]:
+def _get_token() -> str:
     token = os.environ.get("KOT_ACCESS_TOKEN")
+    if token:
+        return token
+    # Store版Claude DesktopはGUIプロセスのため環境変数を引き継がない場合があるので
+    # Windowsレジストリから直接読み込む
+    for root, subkey in [
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+    ]:
+        try:
+            with winreg.OpenKey(root, subkey) as key:
+                value, _ = winreg.QueryValueEx(key, "KOT_ACCESS_TOKEN")
+                if value:
+                    return value
+        except OSError:
+            continue
+    raise RuntimeError("環境変数 KOT_ACCESS_TOKEN が設定されていません")
+
+
+def _headers() -> dict[str, str]:
+    token = _get_token()
     if not token:
         raise RuntimeError("環境変数 KOT_ACCESS_TOKEN が設定されていません")
     return {
@@ -50,9 +71,7 @@ def _dump(obj: Any) -> str:
 @mcp.tool()
 def verify_token() -> str:
     """アクセストークンの有効性を確認します。"""
-    token = os.environ.get("KOT_ACCESS_TOKEN", "")
-    if not token:
-        raise RuntimeError("環境変数 KOT_ACCESS_TOKEN が設定されていません")
+    token = _get_token()
     result = _call("GET", f"/tokens/{token}/available")
     return _dump(result)
 
